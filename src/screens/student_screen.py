@@ -38,7 +38,7 @@ def student_dashboard():
 
     st.space()
 
-    # ── Welcome Message ───────────────────────────────────────────────
+    # ── Welcome + Header ──────────────────────────────────────────────
     c1, c2 = st.columns([3, 1], vertical_alignment='center')
     with c1:
         st.header('Your Enrolled Subjects')
@@ -133,68 +133,66 @@ def student_screen():
     st.divider()
 
     # ════════════════════════════════════════════════════════════════
-    # LOGIN MODE
+    # LOGIN MODE — Name + Face only
     # ════════════════════════════════════════════════════════════════
     if st.session_state['student_mode'] == 'login':
         st.header('Login using faceID', text_alignment="left")
 
+        # Name input first
+        login_name = st.text_input(
+            "Enter your name",
+            placeholder="E.g. Bhumika Goyal",
+            key="login_name"
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Face photo
         photo_source = st.camera_input("📷 Position your face in the center")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        st.markdown("#### 🎤 Record Your Voice")
-        st.info("Say 'I am present, my name is [your name]' clearly.")
-        audio_data = None
-        try:
-            audio_data = st.audio_input("Record your voice", key="login_voice_input")
-        except Exception:
-            st.error("Audio input failed!")
-        if audio_data:
-            st.success("✅ Voice recorded!")
-
         if photo_source:
             if st.button('🔍 Login', type='primary', width='stretch'):
-                img = np.array(Image.open(photo_source))
-                with st.spinner('AI is scanning your face..'):
-                    detected, all_ids, num_faces = predict_attendance(img)
+                if not login_name:
+                    st.warning('Please enter your name!')
+                else:
+                    img = np.array(Image.open(photo_source))
+                    with st.spinner('AI is scanning your face..'):
+                        detected, all_ids, num_faces = predict_attendance(img)
 
-                    if num_faces == 0:
-                        st.warning('Face not found')
-                    elif num_faces > 1:
-                        st.warning('Multiple faces found! Please ensure only one face is visible.')
-                    else:
-                        if detected:
-                            student_id = list(detected.keys())[0]
-                            all_students = get_all_students()
-                            student = next(
-                                (s for s in all_students if str(s['student_id']) == str(student_id)),
-                                None
-                            )
-                            if student:
-                                if audio_data:
-                                    with st.spinner('Saving voice profile...'):
-                                        voice_emb = get_voice_embedding(audio_data.read())
-                                        if voice_emb:
-                                            supabase.table("students")\
-                                                .update({"voice_embedding": voice_emb})\
-                                                .eq("student_id", student['student_id'])\
-                                                .execute()
-
-                                st.session_state.is_logged_in = True
-                                st.session_state.user_role = 'student'
-                                st.session_state.student_data = student
-                                st.toast(f"Welcome Back {student['name']}!")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.warning('Face recognized but no matching student found!')
+                        if num_faces == 0:
+                            st.warning('Face not found')
+                        elif num_faces > 1:
+                            st.warning('Multiple faces found! Please ensure only one face is visible.')
                         else:
-                            st.info('Face not recognized! Please register first.')
-                            st.session_state['student_mode'] = 'register'
-                            st.rerun()
+                            if detected:
+                                student_id = list(detected.keys())[0]
+                                all_students = get_all_students()
+
+                                # Match by face AND name
+                                student = next(
+                                    (s for s in all_students
+                                     if str(s['student_id']) == str(student_id)
+                                     and s['name'].lower().strip() == login_name.lower().strip()),
+                                    None
+                                )
+                                if student:
+                                    st.session_state.is_logged_in = True
+                                    st.session_state.user_role = 'student'
+                                    st.session_state.student_data = student
+                                    st.toast(f"Welcome Back {student['name']}!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.warning('Name and face do not match. Please try again!')
+                            else:
+                                st.info('Face not recognized! Please register first.')
+                                st.session_state['student_mode'] = 'register'
+                                st.rerun()
 
     # ════════════════════════════════════════════════════════════════
-    # REGISTER MODE
+    # REGISTER MODE — Name + Roll No + Section + Face + Voice
     # ════════════════════════════════════════════════════════════════
     elif st.session_state['student_mode'] == 'register':
         st.header('📝 Create New Profile')
