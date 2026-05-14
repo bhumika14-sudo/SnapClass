@@ -17,7 +17,7 @@ def share_subject_dialog(subject_name, subject_code):
         </style>
     """, unsafe_allow_html=True)
 
-    app_domain = "snapclass-main.streamlit.app"
+    app_domain = "main-snapclass.streamlit.app"
     join_url = f"{app_domain}/?join-code={subject_code}"
 
     st.header("Scan to Join")
