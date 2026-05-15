@@ -18,13 +18,10 @@ def create_teacher(username, password, name):
 
 def teacher_login(username, password):
     response = supabase.table("teachers").select("*").eq("username", username).execute()
-
     if response.data:
         teacher = response.data[0]
-
         if check_pass(password, teacher['password']):
             return teacher
-
     return None
 
 def get_all_students():
@@ -41,33 +38,31 @@ def create_student(new_name, face_embedding=None, voice_embedding=None, roll_no=
     }
     response = supabase.table('students').insert(data).execute()
     return response.data
+
 def create_subject(subject_code, name, section, teacher_id):
-    # Check if subject already exists for this teacher
     existing = supabase.table("subjects")\
         .select("*")\
         .eq("subject_code", subject_code)\
         .eq("teacher_id", teacher_id)\
         .execute()
-    
     if existing.data:
         return None, "Subject with this code already exists!"
-    
     data = {"subject_code": subject_code, "name": name, "section": section, "teacher_id": teacher_id}
     response = supabase.table("subjects").insert(data).execute()
     return response.data, None
 
 def get_teacher_subject(teacher_id):
-    response = supabase.table('subjects').select("*, subject_students(count), attendance_logs(timestamp)").eq("teacher_id", teacher_id).execute()
+    response = supabase.table('subjects')\
+        .select("*, subject_students(count), attendance_logs(timestamp)")\
+        .eq("teacher_id", teacher_id)\
+        .execute()
     subjects = response.data
 
     for sub in subjects:
         sub['total_students'] = sub.get("subject_students", [{}])[0].get('count', 0) if sub.get('subject_students') else 0
-
         attendance = sub.get('attendance_logs', [])
         unique_sessions = len(set(log['timestamp'] for log in attendance))
-
         sub['total_classes'] = unique_sessions
-
         sub.pop('subject_students', None)
         sub.pop('attendance_logs', None)
 
@@ -79,15 +74,26 @@ def enroll_student_to_subject(student_id, subject_id):
     return response.data
 
 def unenroll_student_to_subject(student_id, subject_id):
-    response = supabase.table('subject_students').delete().eq('student_id', student_id).eq('subject_id', subject_id).execute()
+    response = supabase.table('subject_students').delete()\
+        .eq('student_id', student_id)\
+        .eq('subject_id', subject_id)\
+        .execute()
     return response.data
 
 def get_student_subjects(student_id):
-    response = supabase.table('subject_students').select('*, subjects(*)').eq('student_id', student_id).execute()
+    response = supabase.table('subject_students')\
+        .select('*, subjects(*)')\
+        .eq('student_id', student_id)\
+        .execute()
     return response.data
 
 def get_student_attendance(student_id):
-    response = supabase.table('attendance_logs').select('*, subjects(*)').eq('student_id', student_id).execute()
+    # fix: only return logs where student was actually present
+    response = supabase.table('attendance_logs')\
+        .select('*, subjects(*)')\
+        .eq('student_id', student_id)\
+        .eq('is_present', True)\
+        .execute()
     return response.data
 
 def create_attendance(logs):
@@ -95,11 +101,26 @@ def create_attendance(logs):
     return response.data
 
 def get_student_by_face_label(face_label):
-    # face_label is what the classifier returns e.g. "1"
     response = supabase.table('students').select("*").eq('student_id', face_label).execute()
     return response.data[0] if response.data else None
 
+# fix: correctly filter attendance logs by teacher using subject_id list
 def get_attendance_for_teacher(teacher_id):
-    response = supabase.table('attendance_logs').select("*, subjects!inner(*)").eq('subjects.teacher_id', teacher_id).execute()
-    return response.data
+    # step 1: get all subject_ids belonging to this teacher
+    subjects_res = supabase.table('subjects')\
+        .select('subject_id')\
+        .eq('teacher_id', teacher_id)\
+        .execute()
 
+    if not subjects_res.data:
+        return []
+
+    subject_ids = [s['subject_id'] for s in subjects_res.data]
+
+    # step 2: fetch attendance logs only for those subjects
+    response = supabase.table('attendance_logs')\
+        .select('*, subjects(*)')\
+        .in_('subject_id', subject_ids)\
+        .execute()
+
+    return response.data
