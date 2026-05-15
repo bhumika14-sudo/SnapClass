@@ -88,7 +88,6 @@ def get_student_subjects(student_id):
     return response.data
 
 def get_student_attendance(student_id):
-    # fix: only return logs where student was actually present
     response = supabase.table('attendance_logs')\
         .select('*, subjects(*)')\
         .eq('student_id', student_id)\
@@ -97,16 +96,29 @@ def get_student_attendance(student_id):
     return response.data
 
 def create_attendance(logs):
-    response = supabase.table('attendance_logs').insert(logs).execute()
+    # fix: validate student_id exists before inserting to avoid foreign key crash
+    valid_logs = []
+    for log in logs:
+        check = supabase.table('students')\
+            .select('student_id')\
+            .eq('student_id', log['student_id'])\
+            .execute()
+        if check.data:
+            valid_logs.append(log)
+
+    if not valid_logs:
+        raise Exception(
+            "No valid students found in DB — please re-enroll students and retrain the face model."
+        )
+
+    response = supabase.table('attendance_logs').insert(valid_logs).execute()
     return response.data
 
 def get_student_by_face_label(face_label):
     response = supabase.table('students').select("*").eq('student_id', face_label).execute()
     return response.data[0] if response.data else None
 
-# fix: correctly filter attendance logs by teacher using subject_id list
 def get_attendance_for_teacher(teacher_id):
-    # step 1: get all subject_ids belonging to this teacher
     subjects_res = supabase.table('subjects')\
         .select('subject_id')\
         .eq('teacher_id', teacher_id)\
@@ -117,7 +129,6 @@ def get_attendance_for_teacher(teacher_id):
 
     subject_ids = [s['subject_id'] for s in subjects_res.data]
 
-    # step 2: fetch attendance logs only for those subjects
     response = supabase.table('attendance_logs')\
         .select('*, subjects(*)')\
         .in_('subject_id', subject_ids)\
