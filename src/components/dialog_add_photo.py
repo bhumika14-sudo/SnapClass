@@ -5,24 +5,25 @@ from PIL import Image
 def add_photos_dialog():
     if "attendance_images" not in st.session_state:
         st.session_state["attendance_images"] = []
-
     if "photo_tab" not in st.session_state:
         st.session_state["photo_tab"] = "camera"
-
     if "last_camera_photo" not in st.session_state:
         st.session_state["last_camera_photo"] = None
+    if "uploaded_names" not in st.session_state:          # fix 2: track uploaded filenames
+        st.session_state["uploaded_names"] = set()
+
     st.write("Add classroom photos to scan for attendance")
 
     t1, t2 = st.columns(2)
-
     with t1:
-        type_camera = "primary" if st.session_state["photo_tab"] == "camera" else "tertiary"
-        if st.button("Camera", type=type_camera, width='stretch'):
+        # fix 1: "tertiary" → "secondary"
+        type_camera = "primary" if st.session_state["photo_tab"] == "camera" else "secondary"
+        if st.button("Camera", type=type_camera, use_container_width=True):
             st.session_state["photo_tab"] = "camera"
             st.rerun()
     with t2:
-        type_upload = "primary" if st.session_state["photo_tab"] == "upload" else "tertiary"
-        if st.button("Upload photos", type=type_upload, width='stretch'):
+        type_upload = "primary" if st.session_state["photo_tab"] == "upload" else "secondary"
+        if st.button("Upload photos", type=type_upload, use_container_width=True):
             st.session_state["photo_tab"] = "upload"
             st.rerun()
 
@@ -44,30 +45,37 @@ def add_photos_dialog():
         )
 
         if uploaded_files:
-            st.session_state["attendance_images"] = [Image.open(f) for f in uploaded_files]
-            st.toast("Photos Uploaded Successfully")
-    if st.session_state.get("attendance_images", []):
+            existing_names = st.session_state["uploaded_names"]
+            added = 0
+            for f in uploaded_files:
+                if f.name not in existing_names:            # fix 2: only append new files
+                    st.session_state["attendance_images"].append(Image.open(f))
+                    existing_names.add(f.name)
+                    added += 1
+            if added:
+                st.session_state["uploaded_names"] = existing_names
+                st.toast(f"{added} photo(s) uploaded successfully")
 
+    if st.session_state.get("attendance_images"):
         st.divider()
         st.subheader("Selected Photos")
-
         cols = st.columns(3)
         for idx, img in enumerate(st.session_state["attendance_images"]):
             with cols[idx % 3]:
                 st.image(img, use_container_width=True, caption=f"Photo {idx + 1}")
+
     st.divider()
 
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("Clear All Photos", type="tertiary", width='stretch', icon=":material/delete:"):
+        if st.button("Clear All Photos", type="secondary", use_container_width=True, icon=":material/delete:"):
             st.session_state["attendance_images"] = []
-            if "dialog_upload" in st.session_state:
-                del st.session_state["dialog_upload"]
-            if "dialog_cam" in st.session_state:
-                del st.session_state["dialog_cam"]
+            st.session_state["uploaded_names"] = set()     # fix 3: also clear tracked names
+            st.session_state.pop("dialog_upload", None)
+            st.session_state.pop("dialog_cam", None)
             st.session_state["last_camera_photo"] = None
             st.toast("All photos cleared")
             st.rerun()
     with c2:
-        if st.button("Done", type="primary", width='stretch'):
+        if st.button("Done", type="primary", use_container_width=True):
             st.rerun()

@@ -1,7 +1,5 @@
 import streamlit as st
-from src.database.config import supabase
-import time 
-from src.database.db import create_attendance
+from src.database.db import create_attendance  # fix 2: removed unused supabase import
 
 def show_attendance_result(df, logs, result_key='voice_attendance_results'):
     st.write('Please review attendance before confirming.')
@@ -10,13 +8,13 @@ def show_attendance_result(df, logs, result_key='voice_attendance_results'):
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button('Discard', width='stretch', type='secondary'):
+        if st.button('Discard', use_container_width=True, type='secondary'):  # fix 1
             st.session_state[result_key] = None
             st.session_state.attendance_images = []
             st.rerun()
 
     with col2:
-        if st.button('Confirm & Save', width='stretch', type='primary'):
+        if st.button('Confirm & Save', use_container_width=True, type='primary'):  # fix 1
             try:
                 create_attendance(logs)
                 st.toast('✅ Attendance saved successfully!')
